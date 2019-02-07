@@ -10,9 +10,18 @@ interface TriePutCb {
   (err?: any): void
 }
 
+interface TrieGetRootCb {
+  (err: any, value: Buffer): void
+}
+
+interface TrieCopyCb {
+  (err: any, value: Trie): void
+}
+
 interface Trie {
-  root: Buffer
-  copy(): Trie
+  getRoot(cb: TrieGetRootCb): void
+  setRoot(key: Buffer): void
+  copy(cb: TrieCopyCb): Trie
   getRaw(key: Buffer, cb: TrieGetCb): void
   putRaw(key: Buffer | string, value: Buffer, cb: TriePutCb): void
   get(key: Buffer | string, cb: TrieGetCb): void
@@ -81,19 +90,25 @@ export default class Account {
   }
 
   getStorage(trie: Trie, key: Buffer | string, cb: TrieGetCb) {
-    const t = trie.copy()
-    t.root = this.stateRoot
-    t.get(key, cb)
+    trie.copy((err: any, trieCopy: Trie) => {
+      trieCopy.setRoot(this.stateRoot)
+      trieCopy.get(key, cb)
+    })
+
   }
 
   setStorage(trie: Trie, key: Buffer | string, val: Buffer | string, cb: () => void) {
-    const t = trie.copy()
-    t.root = this.stateRoot
-    t.put(key, val, (err: any) => {
-      if (err) return cb()
-      this.stateRoot = t.root
-      cb()
+    trie.copy((err: any, trieCopy: Trie) => {
+      trieCopy.setRoot(this.stateRoot)
+      trieCopy.put(key, val, (err: any) => {
+        if (err) return cb()
+        trieCopy.getRoot((err: any, newRoot: Buffer) => {
+          this.stateRoot = newRoot
+          cb()
+        })
+      })
     })
+
   }
 
   isEmpty() {
